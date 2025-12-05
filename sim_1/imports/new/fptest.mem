@@ -1,0 +1,39 @@
+// Test program para register files separados y FLW/FSW
+// ======================================================
+// Instrucciones:
+// 1. FLW  f10, 0(x0)      -> Load 0.75 to f10
+// 2. FLW  f11, 4(x0)      -> Load -1.5 to f11
+// 3. FADD f12, f10, f11   -> f12 = f10 + f11 = -0.75 (stall expected)
+// 4. FMUL f13, f12, f12   -> f13 = f12 * f12 = 0.5625 (forwarding from E->M)
+// 5. FSW  f13, 12(x0)     -> Store f13 to dmem[3]
+// 6. ADDI x1, x0, 5       -> Test Int path (x1 = 5)
+// 7. FLW  f1, 12(x0)      -> Load stored value back to f1
+// 8. ADDI x2, x1, 10      -> x2 = x1 + 10 = 15 (no stall, different type)
+
+// Encoding manual (RISC-V FP):
+// FLW  rd, imm(rs1)  -> opcode=0x07, funct3=0x2
+//   Formato: imm[11:0] | rs1[19:15] | 010 | rd[11:7] | 0000111
+// FSW  rs2, imm(rs1) -> opcode=0x27, funct3=0x2
+//   Formato: imm[11:5] | rs2[24:20] | rs1[19:15] | 010 | imm[4:0] | 0100111
+// FADD.S fd, fs1, fs2 -> opcode=0x53, funct7=0x00
+//   Formato: 0000000 | fs2[24:20] | fs1[19:15] | rm[14:12] | fd[11:7] | 1010011
+// FMUL.S fd, fs1, fs2 -> opcode=0x53, funct7=0x08
+//   Formato: 0001000 | fs2[24:20] | fs1[19:15] | rm[14:12] | fd[11:7] | 1010011
+
+// Generación de instrucciones:
+// 1. FLW f10, 0(x0)  = 000000000000_00000_010_01010_0000111 = 0x00002507
+00002507
+// 2. FLW f11, 4(x0)  = 000000000100_00000_010_01011_0000111 = 0x00402587
+00402587
+// 3. FADD.S f12, f10, f11 (rm=0) = 0000000_01011_01010_000_01100_1010011 = 0x00B50653
+00B50653
+// 4. FMUL.S f13, f12, f12 (rm=0) = 0001000_01100_01100_000_01101_1010011 = 0x10C606D3
+10C606D3
+// 5. FSW f13, 12(x0) = 0000000_01101_00000_010_01100_0100111 = 0x00D02627
+00D02627
+// 6. ADDI x1, x0, 5  = 000000000101_00000_000_00001_0010011 = 0x00500093
+00500093
+// 7. FLW f1, 12(x0)  = 000000001100_00000_010_00001_0000111 = 0x00C02087
+00C02087
+// 8. ADDI x2, x1, 10 = 000000001010_00001_000_00010_0010011 = 0x00A08113
+00A08113
