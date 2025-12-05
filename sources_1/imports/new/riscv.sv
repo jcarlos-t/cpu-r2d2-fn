@@ -34,7 +34,7 @@ module top(
     .clk(clk), 
     .reset(reset), 
     .en(save_pc), 
-    .d(PCF + 4),  // Guardar PC+4 para retornar a la siguiente instrucción
+    .d(PCF),  // Guardar PC (siguiente instrucción) para retornar
     .q(pc_backup)
   );
 

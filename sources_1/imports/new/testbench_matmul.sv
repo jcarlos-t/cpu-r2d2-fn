@@ -111,7 +111,6 @@ module testbench_matmul();
         $display("║ >>> [MATMUL START] Ciclo %0d: STARTMATMUL2 detectado", 
                  cycle_count);
         $display("║     PC actual guardado: %08h", PCF);
-        $display("║     PC+4 a guardar: %08h", PCF + 4);
         $display("║     Control: save_pc=%b, im_sel=%b, toggle_fsm=%b", 
                  save_pc, im_sel, toggle_fsm);
         $display("║     FSM: Estado actual=%b, próximo estado=MATMUL2(1)",
@@ -169,19 +168,7 @@ module testbench_matmul();
     end
   end
   
-  // Monitor de cambios en el PC
-  logic [31:0] prev_pc;
-  initial prev_pc = 0;
-  
-  always @(posedge clk) begin
-    if (!reset) begin
-      if (PCF != prev_pc + 4 && cycle_count > 0) begin
-        $display("\n    [PC JUMP] De %08h a %08h (diferencia: %0d) en ciclo %0d",
-                 prev_pc, PCF, $signed(PCF - prev_pc), cycle_count);
-      end
-      prev_pc = PCF;
-    end
-  end
+
   
   // Generación de archivo VCD para GTKWave (opcional)
   initial begin
