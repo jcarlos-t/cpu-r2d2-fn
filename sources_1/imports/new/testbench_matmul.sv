@@ -11,11 +11,10 @@ module testbench_matmul();
   logic [31:0] InstrF;
   logic [31:0] pc_backup;
   logic        save_pc;
-  logic        pc_mux_sel;
-  logic [1:0]  im_sel;
-  logic        start_matmul2;
-  logic        end_matmul;
-  logic [1:0]  fsm_state;
+  logic        save_pc;
+  logic        im_sel;
+  logic        toggle_fsm;
+  logic        fsm_state;
   
   // Variables para control de test
   integer cycle_count;
@@ -37,16 +36,14 @@ module testbench_matmul();
   end
   
   // Asignación de señales internas mediante hierarchical reference
-  assign PCF = dut.PCF_or_zero;
+  assign PCF = dut.PCF;
   assign InstrF = dut.InstrF;
   
   // Señales de MATMUL - ahora con las rutas correctas
   assign pc_backup = dut.pc_backup;
   assign save_pc = dut.save_pc;
-  assign pc_mux_sel = dut.pc_mux_sel;
   assign im_sel = dut.im_sel;
-  assign start_matmul2 = dut.start_matmul2;
-  assign end_matmul = dut.end_matmul;
+  assign toggle_fsm = dut.toggle_fsm;
   assign fsm_state = dut.fsm.state;
   
   // Secuencia de reset y test
@@ -55,9 +52,8 @@ module testbench_matmul();
     $display("  TESTBENCH MATMUL - Verificación de Microcodigo");
     $display("================================================================================");
     $display("\n[HEADER] Señales principales de control:");
-    $display("  FSM_STATE: Estado actual del FSM (00=NORMAL, 01=MATMUL2)");
-    $display("  IM_SEL: Selección de instruction memory (00=normal, 01=matmul2)");
-    $display("  PC_MUX_SEL: Mux de PC (0=backup, 1=normal)");
+    $display("  FSM_STATE: Estado actual del FSM (0=NORMAL, 1=MATMUL2)");
+    $display("  IM_SEL: Selección de instruction memory (0=normal, 1=matmul2)");
     $display("  SAVE_PC: Habilita guardado de PC");
     $display("  RESET_PC: Resetea PC a 0");
     $display("================================================================================\n");
@@ -87,8 +83,8 @@ module testbench_matmul();
   // Monitor detallado de señales en cada ciclo
   always @(posedge clk) begin
     if (!reset) begin
-      $display("[CICLO %3d] PC=%08h | Instr=%08h | FSM=%b | IM_SEL=%b | PC_MUX=%b | WB: RegWr=%b Rd=%2d Val=%08h",
-               cycle_count, PCF, InstrF, fsm_state, im_sel, pc_mux_sel, 
+      $display("[CICLO %3d] PC=%08h | Instr=%08h | FSM=%b | IM_SEL=%b | WB: RegWr=%b Rd=%2d Val=%08h",
+               cycle_count, PCF, InstrF, fsm_state, im_sel, 
                dut.riscv.RegWriteW, dut.riscv.RdW, dut.riscv.ResultW);
     end
   end
@@ -97,28 +93,27 @@ module testbench_matmul();
   // Monitor de señales de control MATMUL con estado detallado
   always @(posedge clk) begin
     if (!reset) begin
-      // Detectar inicio de MATMUL
-      if (start_matmul2) begin
+      // Detectar inicio de MATMUL (Toggle en estado NORMAL)
+      if (toggle_fsm && fsm_state == 1'b0) begin
         $display("\n╔═══════════════════════════════════════════════════════════════════╗");
         $display("║ >>> [MATMUL START] Ciclo %0d: STARTMATMUL2 detectado", 
                  cycle_count);
         $display("║     PC actual guardado: %08h", PCF);
         $display("║     PC+4 a guardar: %08h", PCF + 4);
-        $display("║     Control: save_pc=%b, pc_mux_sel=%b, im_sel=%b, reset_pc=%b", 
-                 save_pc, pc_mux_sel, im_sel, dut.reset_pc);
-        $display("║     FSM: Estado actual=%b, próximo estado=MATMUL2(01)",
+        $display("║     Control: save_pc=%b, im_sel=%b, toggle_fsm=%b", 
+                 save_pc, im_sel, toggle_fsm);
+        $display("║     FSM: Estado actual=%b, próximo estado=MATMUL2(1)",
                  fsm_state);
         $display("╚═══════════════════════════════════════════════════════════════════╝\n");
       end
       
-      // Detectar fin de MATMUL
-      if (end_matmul) begin
+      // Detectar fin de MATMUL (Toggle en estado MATMUL2)
+      if (toggle_fsm && fsm_state == 1'b1) begin
         $display("\n╔═══════════════════════════════════════════════════════════════════╗");
         $display("║ <<< [MATMUL END] Ciclo %0d: ENDMATMUL detectado", cycle_count);
         $display("║     Estado FSM actual: %b (%s)", fsm_state,
-                 fsm_state == 2'b01 ? "MATMUL2" : "NORMAL");
+                 fsm_state == 1'b1 ? "MATMUL2" : "NORMAL");
         $display("║     PC backup a restaurar: %08h", pc_backup);
-        $display("║     Control: pc_mux_sel=%b (debe cambiar a 0)", pc_mux_sel);
         $display("║     Retornando a flujo normal...");
         $display("╚═══════════════════════════════════════════════════════════════════╝\n");
       end
@@ -162,8 +157,10 @@ module testbench_matmul();
   always @(posedge clk) begin
     if (!reset && cycle_count > 0) begin
       case (opcode)
-        7'b1111010: $display("\n>>> [DECODE] STARTMATMUL2 detectado en ciclo %0d", cycle_count);
-        7'b1111100: $display("\n<<< [DECODE] ENDMATMUL detectado en ciclo %0d", cycle_count);
+        7'b1111010: begin
+          if (InstrF[14:12] == 3'b000) $display("\n>>> [DECODE] STARTMATMUL2 detectado en ciclo %0d", cycle_count);
+          else if (InstrF[14:12] == 3'b111) $display("\n<<< [DECODE] ENDMATMUL detectado en ciclo %0d", cycle_count);
+        end
         7'b0110011: if (cycle_count % 10 == 0) $display("    [DECODE] R-type (Integer)");
         7'b1010011: if (cycle_count % 10 == 0) $display("    [DECODE] R-type (FPU)");
         7'b0000011: if (cycle_count % 10 == 0) $display("    [DECODE] LW");

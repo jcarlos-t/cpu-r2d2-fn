@@ -27,7 +27,7 @@
 // matmul2 x13, x10, x11
 // rd=x13 (dir C), rs1=x10 (dir A), rs2=x11 (dir B)
 // funct7=0000000, rs2=01011, rs1=01010, funct3=000, rd=01101, opcode=1111010
-00B506AA  // MATMUL2 x13, x10, x11
+00B506FA  // MATMUL2 x13, x10, x11 (opcode corrected to 1111010 = 7A)
 
 // ============================================================================
 // VERIFICACIÓN: Leer resultados de C

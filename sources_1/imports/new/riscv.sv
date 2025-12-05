@@ -9,17 +9,24 @@ module top(
   // Señales para MATMUL microcodigo
   logic [31:0] pc_backup;
   logic [31:0] pc_to_imem;
-  logic [31:0] PCF_or_zero;  // PC normal o 0 cuando inicia MATMUL
-  logic        save_pc, pc_mux_sel, reset_pc;
-  logic [1:0]  im_sel;
-  logic        start_matmul2, end_matmul;
+  logic        save_pc;
+  logic        im_sel;
+  logic        toggle_fsm;
   logic [31:0] instr_normal, instr_matmul2;
+  logic [31:0] target_pc_val;
 
   // Instancia del procesador con señales MATMUL
   riscv riscv(
-    clk, reset, PCF_or_zero, InstrF, MemWriteM, DataAdrM,
-    WriteDataM, ReadDataM,
-    start_matmul2, end_matmul, reset_pc
+    .clk(clk),
+    .reset(reset),
+    .PCF(PCF),
+    .InstrF(InstrF),
+    .MemWriteM(MemWriteM),
+    .ALUResultM(DataAdrM),
+    .WriteDataM(WriteDataM),
+    .ReadDataM(ReadDataM),
+    .ToggleFSM(toggle_fsm),
+    .TargetPC(target_pc_val)
   );
   
   // PC backup register - guarda el PC cuando inicia MATMUL
@@ -27,7 +34,7 @@ module top(
     .clk(clk), 
     .reset(reset), 
     .en(save_pc), 
-    .d(PCF_or_zero + 4),  // Guardar PC+4 para retornar a la siguiente instrucción
+    .d(PCF + 4),  // Guardar PC+4 para retornar a la siguiente instrucción
     .q(pc_backup)
   );
 
@@ -35,38 +42,27 @@ module top(
   matmul_fsm fsm(
     .clk(clk),
     .reset(reset),
-    .start_matmul2(start_matmul2),
-    .end_matmul(end_matmul),
+    .toggle_fsm(toggle_fsm),
     .im_sel(im_sel),
-    .pc_mux_sel(pc_mux_sel),
     .save_pc(save_pc)
   );
 
-  // Mux del PC: selecciona entre PC normal (durante MATMUL) y PC backup (al retornar)
-  mux2 #(32) pc_source_mux(
-    .d0(pc_backup),        // PC guardado (retorno de MATMUL)
-    .d1(PCF_or_zero),      // PC normal o reseteado
-    .s(pc_mux_sel),
-    .y(pc_to_imem)
-  );
+  // Lógica para determinar el Target PC
+  // Si estamos en MATMUL2 y ocurre Toggle -> Vamos a NORMAL -> Target = pc_backup
+  // Si estamos en NORMAL y ocurre Toggle -> Vamos a MATMUL -> Target = 0
+  assign target_pc_val = (fsm.state == 1'b1) ? pc_backup : 32'b0;
   
-  // Mux para resetear PC a 0 cuando inicia MATMUL
-  mux2 #(32) pc_reset_mux(
-    .d0(32'h00000000),     // PC = 0 cuando inicia MATMUL
-    .d1(PCF),              // PC normal
-    .s(~reset_pc),         // reset_pc=1 -> PC=0
-    .y(PCF_or_zero)
-  );
+
 
   // Tres instruction memories
-  imem imem_normal(pc_to_imem, instr_normal, file_name);
-  imem imem_matmul2(pc_to_imem, instr_matmul2, "matmul2.mem");
+  imem imem_normal(PCF, instr_normal, file_name);
+  imem imem_matmul2(PCF, instr_matmul2, "matmul2.mem");
 
   // Mux de instrucciones: selecciona de qué memoria leer
-  mux3 #(32) instr_mux(
+  // Mux de instrucciones: selecciona de qué memoria leer
+  mux2 #(32) instr_mux(
     .d0(instr_normal),
     .d1(instr_matmul2),
-    .d2(32'b0), // Unused
     .s(im_sel),
     .y(InstrF)
   );
@@ -84,7 +80,8 @@ module riscv(
   output logic [31:0] ALUResultM, WriteDataM,
   input  logic [31:0] ReadDataM,
   // Señales de control para MATMUL
-  output logic        StartMatmul2, EndMatmul, ResetPC
+  output logic        ToggleFSM,
+  input  logic [31:0] TargetPC
 );
   logic [6:0]  opD;
   logic [2:0]  funct3D;
@@ -107,6 +104,8 @@ module riscv(
 
   logic [31:0] RD1D_int, RD2D_int;
   logic [31:0] RD1D_fp, RD2D_fp;
+  
+  logic StartMatmul2, EndMatmul, ResetPC;
 
   controller c(
     clk, reset,
@@ -115,7 +114,8 @@ module riscv(
     isFPD, isFPE, round_modeE, useFP_RF_D, useFP_RF_E,
     MemWriteM, RegWriteM, isFPM, useFP_RF_M,
     RegWriteW, ResultSrcW, isFPW, useFP_RF_W,
-    StartMatmul2, EndMatmul, ResetPC
+    StartMatmul2, EndMatmul, ResetPC, ToggleFSM,
+    StallD
   );
 
   datapath dp(
@@ -127,7 +127,8 @@ module riscv(
     MemWriteM, WriteDataM, ALUResultM, ReadDataM,
     RegWriteW, useFP_RF_W, ResultSrcW,
     Rs1D, Rs2D, Rs1E, Rs2E, RdE, RdM, RdW, RdD,
-    RD1D_int, RD2D_int, RD1D_fp, RD2D_fp
+    RD1D_int, RD2D_int, RD1D_fp, RD2D_fp,
+    ToggleFSM, TargetPC
   );
 
   hazard hu(
@@ -213,7 +214,8 @@ module controller(
   output logic [1:0] ResultSrcW,
   output logic       isFPW, useFP_RF_W,
   // Señales para MATMUL microcodigo
-  output logic       StartMatmul2, EndMatmul, ResetPC
+  output logic       StartMatmul2, EndMatmul, ResetPC, ToggleFSM,
+  input  logic       StallD
 );
   // señales de pipelined
   logic       RegWriteD, RegWriteE;
@@ -239,7 +241,8 @@ module controller(
   
   assign StartMatmul2 = is_matmul_op && (funct7D == 7'b0000000) && (funct3D == 3'b000);
   assign EndMatmul    = is_matmul_op && (funct7D == 7'b1111111) && (funct3D == 3'b111);
-  assign ResetPC      = StartMatmul2;
+  assign ResetPC      = StartMatmul2 & ~StallD;
+  assign ToggleFSM    = (StartMatmul2 | EndMatmul) & ~StallD;
 
   // Decode stage
   maindec md(
@@ -307,7 +310,7 @@ module maindec(
       7'b1010011: controls = 11'b1_xx_0_0_00_0_11_0; // R-type FPU
       // Instrucciones MATMUL (R-type, opcode único, diferenciadas por funct7/funct3)
       // Formato: matmul2/matmul3/endmatmul rd, rs1, rs2
-      7'b1111010: controls = 11'b1_xx_0_0_00_0_00_0; // MATMUL (tipo R, puede escribir en rd)
+      7'b1111010: controls = 11'b1_00_0_0_00_0_00_0; // MATMUL (tipo R, puede escribir en rd)
       default:    controls = 11'bx_xx_x_x_xx_x_xx_x; 
     endcase
 endmodule
@@ -397,10 +400,12 @@ module datapath(
   output logic [4:0]  RdD, // Necesario para shadow write logic
   // Entradas de Register Files (desde módulo riscv)
   input  logic [31:0] RD1D_int, RD2D_int,
-  input  logic [31:0] RD1D_fp, RD2D_fp
+  input  logic [31:0] RD1D_fp, RD2D_fp,
+  input  logic        ForcePC, // Fuerza salto a TargetPC
+  input  logic [31:0] TargetPC // Dirección de salto forzado
 );
   // Fetch
-  logic [31:0] PCNextF, PCPlus4F;
+  logic [31:0] PCNextF, PCPlus4F, PCBranchF;
 
   // Decode
   logic [31:0] InstrD;
@@ -430,7 +435,10 @@ module datapath(
   logic [31:0] ResultW;
 
   // Etapa de Fetch
-  mux2 #(32)    pcmux(PCPlus4F, PCTargetE, PCSrcE, PCNextF);
+  // Lógica de PC Next: ResetPC > Branch/Jump > PC+4
+  mux2 #(32)    pcmux_branch(PCPlus4F, PCTargetE, PCSrcE, PCBranchF);
+  mux2 #(32)    pcmux_force(PCBranchF, TargetPC, ForcePC, PCNextF);
+  
   flopenr #(32) pcreg(clk, reset, ~StallF, PCNextF, PCF);
   adder         pcadd(PCF, 32'h4, PCPlus4F);
 
@@ -545,14 +553,13 @@ endmodule
 // FSM para control de MATMUL microcodigo
 module matmul_fsm(
   input  logic       clk, reset,
-  input  logic       start_matmul2, end_matmul,
-  output logic [1:0] im_sel,
-  output logic       pc_mux_sel,
+  input  logic       toggle_fsm,
+  output logic       im_sel,
   output logic       save_pc
 );
-  typedef enum logic [1:0] {
-    NORMAL  = 2'b00,
-    MATMUL2 = 2'b01
+  typedef enum logic {
+    NORMAL  = 1'b0,
+    MATMUL2 = 1'b1
   } state_t;
   
   state_t state, next_state;
@@ -570,15 +577,11 @@ module matmul_fsm(
     next_state = state;
     case (state)
       NORMAL: begin
-        if (start_matmul2)
+        if (toggle_fsm)
           next_state = MATMUL2;
       end
       MATMUL2: begin
-        if (end_matmul)
-          next_state = NORMAL;
-      end
-      MATMUL2: begin
-        if (end_matmul)
+        if (toggle_fsm)
           next_state = NORMAL;
       end
       default: next_state = NORMAL;
@@ -589,18 +592,15 @@ module matmul_fsm(
   always_comb begin
     case (state)
       NORMAL: begin
-        im_sel = 2'b00;      // Instruction memory normal
-        pc_mux_sel = 1'b1;   // Use normal PC
-        save_pc = start_matmul2; // Save PC when starting MATMUL
+        im_sel = 1'b0;      // Instruction memory normal
+        save_pc = toggle_fsm; // Save PC when starting MATMUL (toggle from NORMAL)
       end
       MATMUL2: begin
-        im_sel = 2'b01;      // Instruction memory matmul2
-        pc_mux_sel = end_matmul ? 1'b0 : 1'b1; // Return to backup PC on end
+        im_sel = 1'b1;      // Instruction memory matmul2
         save_pc = 1'b0;
       end
       default: begin
-        im_sel = 2'b00;
-        pc_mux_sel = 1'b1;
+        im_sel = 1'b0;
         save_pc = 1'b0;
       end
     endcase
@@ -872,7 +872,7 @@ module fpu_alu (
       // si signos distintos: negativo < positivo
       if (sx != sy) begin
         fp_less_unpacked = sx; // 1 si x negativo
-        return;
+        return fp_less_unpacked;
       end
 
       // mismos signos
@@ -881,7 +881,7 @@ module fpu_alu (
           fp_less_unpacked = (ex < ey);
         else // negativos: mayor exponente -> menor valor
           fp_less_unpacked = (ex > ey);
-        return;
+        return fp_less_unpacked;
       end
 
       // mismo exponente: comparar mantisas (incluye subnormals)

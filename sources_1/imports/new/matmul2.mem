@@ -51,4 +51,4 @@
 009EA627  // fsw f9, 12(x29)      ; Store C[1][1]
 
 // 4. RETURN
-FE00387A  // endmatmul
+FE00707A  // endmatmul (funct7=1111111, funct3=111, opcode=1111010)
