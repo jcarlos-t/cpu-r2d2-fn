@@ -59,7 +59,6 @@ module top(
   imem imem_matmul2(PCF, instr_matmul2, "matmul2.mem");
 
   // Mux de instrucciones: selecciona de qué memoria leer
-  // Mux de instrucciones: selecciona de qué memoria leer
   mux2 #(32) instr_mux(
     .d0(instr_normal),
     .d1(instr_matmul2),
@@ -143,7 +142,7 @@ module riscv(
   );
 
   // ===========================================================================
-  // Shadow Write Logic & Register Files (Moved here for signal visibility)
+  // Shadow Write Logic & Register Files
   // ===========================================================================
   
   // Señales para shadow write de MATMUL
@@ -155,8 +154,6 @@ module riscv(
   assign we_matmul_fp  = (StartMatmul2) & isFPD;
   
   // Capturar direcciones desde los valores leídos del regfile
-  // Forwarding logic for Shadow Write (Decode Stage)
-  // Prioridad: Execute > Memory > Writeback > RegFile
   
   // Forward A (Rs1D)
   always_comb begin
@@ -201,7 +198,6 @@ module riscv(
     .a1(Rs1D), .a2(Rs2D), .a3(RdW), 
     .wd3(ResultW), 
     .rd1(RD1D_fp), .rd2(RD2D_fp),
-    // Shadow write para MATMUL (FP también puede necesitarlo)
     .we_matmul(we_matmul_fp),
     .addr_A(matmul_addr_A),
     .addr_B(matmul_addr_B),
@@ -239,7 +235,7 @@ module controller(
   input  logic       StallD
 );
   // señales de pipelined
-  logic       RegWriteD; // RegWriteE is now an output
+  logic       RegWriteD;
   logic [1:0] ResultSrcD, ResultSrcE, ResultSrcM;
   logic       MemWriteD, MemWriteE;
   logic       JumpD, JumpE;
@@ -329,8 +325,7 @@ module maindec(
       7'b0100111: controls = 11'b0_01_1_1_00_0_00_0; // fsw (FP store)
       7'b0000000: controls = 11'b0_00_0_0_00_0_00_0; // señales para el reset
       7'b1010011: controls = 11'b1_xx_0_0_00_0_11_0; // R-type FPU
-      // Instrucciones MATMUL (R-type, opcode único, diferenciadas por funct7/funct3)
-      // Formato: matmul2/matmul3/endmatmul rd, rs1, rs2
+      // Instrucciones MATMUL (R-type, opcode único)
       7'b1111010: controls = 11'b1_00_0_0_00_0_00_0; // MATMUL (tipo R, puede escribir en rd)
       default:    controls = 11'bx_xx_x_x_xx_x_xx_x; 
     endcase
@@ -488,7 +483,7 @@ module datapath(
     clk, reset, FlushE,
     {RD1D_int, RD2D_int, RD1D_fp, RD2D_fp, PCD, Rs1D, Rs2D, RdD, ImmExtD, PCPlus4D},
     {RD1E_int, RD2E_int, RD1E_fp, RD2E_fp, PCE, Rs1E, Rs2E, RdE, ImmExtE, PCPlus4E}
-  ); // 2 registro pipeline: 32*4 + 32 + 5*3 + 32*3 = 128+32+15+96 = 271? Corregir: 32+32+32+32+32+5+5+5+32+32=239
+  ); 
 
   // Forwarding muxes para Integer path
   mux3 #(32) faemux_int(RD1E_int, ResultW, ALUResultM, ForwardAE, SrcAE_int);

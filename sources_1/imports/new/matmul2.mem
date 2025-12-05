@@ -1,13 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// MATMUL 2x2 Microcode - Optimized for Low Register Usage (12 Regs) & No Stalls
+// MATMUL 2x2 Microcode
 // ═══════════════════════════════════════════════════════════════════════════
 //
 // REGISTERS:
 //   f0-f7:  Input Matrices A & B (Cached)
 //   f8-f11: Temporaries (Reused for partial products and results)
-//
-// STRATEGY:
-//   Interleave calculation of pairs (C00/C01) then (C10/C11) to hide latency.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // 1. LOAD MATRICES (f0-f7)
