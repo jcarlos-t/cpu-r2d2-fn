@@ -1,7 +1,6 @@
 `timescale 1ns / 1ps
 
 module testbench_matmul();
-  // Señales del DUT (Device Under Test)
   logic        clk;
   logic        reset;
   logic [31:0] WriteDataM, DataAdrM;
@@ -29,17 +28,14 @@ module testbench_matmul();
     .file_name("program.mem")  // Archivo de programa principal
   );
   
-  // Generación de reloj: 10ns periodo (100MHz)
   initial begin
     clk = 0;
     forever #5 clk = ~clk;
   end
   
-  // Asignación de señales internas mediante hierarchical reference
   assign PCF = dut.PCF;
   assign InstrF = dut.InstrF;
   
-  // Señales de MATMUL - ahora con las rutas correctas
   assign pc_backup = dut.pc_backup;
   assign save_pc = dut.save_pc;
   assign im_sel = dut.im_sel;
@@ -68,7 +64,6 @@ module testbench_matmul();
     
     $display("[INFO] Reset liberado, iniciando ejecución...\n");
     
-    // Ejecutar por 43 ciclos de reloj
     repeat(43) begin
       @(posedge clk);
       cycle_count = cycle_count + 1;
@@ -95,8 +90,6 @@ module testbench_matmul();
                cycle_count, PCF, InstrF, fsm_state, 
                dut.riscv.RegWriteW, dut.riscv.RdW, dut.riscv.ResultW,
                MemWriteM, WriteDataM);
-      
-      // Monitor adicional para debug de datos eliminado
     end
   end
   
@@ -169,14 +162,12 @@ module testbench_matmul();
   
 
   
-  // Generación de archivo VCD para GTKWave (opcional)
   initial begin
     $dumpfile("testbench_matmul.vcd");
     $dumpvars(0, testbench_matmul);
     $dumpvars(0, dut);
   end
   
-  // Monitor de instrucciones decodificadas
   logic [6:0] opcode;
   assign opcode = InstrF[6:0];
   
@@ -197,7 +188,6 @@ module testbench_matmul();
     end
   end
   
-  // Timeout de seguridad
   initial begin
     #100000; // 100us timeout
     $display("\n[ERROR] TIMEOUT - El test excedió el tiempo máximo de ejecución");

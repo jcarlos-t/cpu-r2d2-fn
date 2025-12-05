@@ -474,8 +474,6 @@ module datapath(
   assign Rs2D       = InstrD[24:20];
   assign RdD        = InstrD[11:7];
   
-  // Shadow write logic and regfiles moved to end of module
-  
   extend  ext(InstrD[31:7], ImmSrcD, ImmExtD);
 
   // Execute - pipeline register con operandos Int y FP separados
