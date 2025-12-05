@@ -69,8 +69,8 @@ module testbench_matmul();
     $display("[INFO] Reset liberado, iniciando ejecución...\n");
     
     // Ejecutar por 200 ciclos de reloj
-    // Ejecutar por 60 ciclos de reloj
-    repeat(60) begin
+    // Ejecutar por 43 ciclos de reloj
+    repeat(43) begin
       @(posedge clk);
       cycle_count = cycle_count + 1;
     end
@@ -97,13 +97,7 @@ module testbench_matmul();
                dut.riscv.RegWriteW, dut.riscv.RdW, dut.riscv.ResultW,
                MemWriteM, WriteDataM);
       
-      // Monitor adicional para debug de datos
-      if (fsm_state == 1'b1) begin
-         $display("    [DEBUG] FP ALU: A=%h B=%h -> Res=%h", 
-                  dut.riscv.dp.SrcAE_fp, dut.riscv.dp.SrcBE_fp, dut.riscv.dp.fpuResult);
-         $display("    [DEBUG] Shadow Regs: x30(A)=%h, x31(B)=%h, x29(C)=%h",
-                  dut.riscv.rf_int.rf[30], dut.riscv.rf_int.rf[31], dut.riscv.rf_int.rf[29]);
-      end
+      // Monitor adicional para debug de datos eliminado
     end
   end
   
@@ -156,20 +150,20 @@ module testbench_matmul();
                
       case (DataAdrM)
         32'h00000060: begin
-          if (WriteDataM == exp_C00) $display("    ✅ [PASS] C[0][0] Correcto: %h (19.0)", WriteDataM);
-          else $display("    ❌ [FAIL] C[0][0] Incorrecto: Esperado %h, Obtenido %h", exp_C00, WriteDataM);
+          if (WriteDataM == exp_C00) $display("    [PASS] C[0][0] Correcto: %h (24.67)", WriteDataM);
+          else $display("     [FAIL] C[0][0] Incorrecto: Esperado %h, Obtenido %h", exp_C00, WriteDataM);
         end
         32'h00000064: begin
-          if (WriteDataM == exp_C01) $display("    ✅ [PASS] C[0][1] Correcto: %h (22.0)", WriteDataM);
-          else $display("    ❌ [FAIL] C[0][1] Incorrecto: Esperado %h, Obtenido %h", exp_C01, WriteDataM);
+          if (WriteDataM == exp_C01) $display("     [PASS] C[0][1] Correcto: %h (30.67)", WriteDataM);
+          else $display("     [FAIL] C[0][1] Incorrecto: Esperado %h, Obtenido %h", exp_C01, WriteDataM);
         end
         32'h00000068: begin
-          if (WriteDataM == exp_C10) $display("    ✅ [PASS] C[1][0] Correcto: %h (43.0)", WriteDataM);
-          else $display("    ❌ [FAIL] C[1][0] Incorrecto: Esperado %h, Obtenido %h", exp_C10, WriteDataM);
+          if (WriteDataM == exp_C10) $display("     [PASS] C[1][0] Correcto: %h (49.95)", WriteDataM);
+          else $display("     [FAIL] C[1][0] Incorrecto: Esperado %h, Obtenido %h", exp_C10, WriteDataM);
         end
         32'h0000006C: begin
-          if (WriteDataM == exp_C11) $display("    ✅ [PASS] C[1][1] Correcto: %h (50.0)", WriteDataM);
-          else $display("    ❌ [FAIL] C[1][1] Incorrecto: Esperado %h, Obtenido %h", exp_C11, WriteDataM);
+          if (WriteDataM == exp_C11) $display("     [PASS] C[1][1] Correcto: %h (62.54)", WriteDataM);
+          else $display("     [FAIL] C[1][1] Incorrecto: Esperado %h, Obtenido %h", exp_C11, WriteDataM);
         end
       endcase
     end

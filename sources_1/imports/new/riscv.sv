@@ -811,12 +811,6 @@ module dmem(
     RAM[22] = 32'h40ECCCCD;  // B[1][0] = 7.4 (addr 0x58)
     RAM[23] = 32'h410E6666;  // B[1][1] = 8.9 (addr 0x5C)
     
-    // ========== Matriz C (2x2) - Base dirección 0x60 (word 24) ==========
-    // Espacio reservado para el resultado (inicialmente 0)
-    RAM[24] = 32'h00000000;  // C[0][0] (addr 0x60)
-    RAM[25] = 32'h00000000;  // C[0][1] (addr 0x64)
-    RAM[26] = 32'h00000000;  // C[1][0] (addr 0x68)
-    RAM[27] = 32'h00000000;  // C[1][1] (addr 0x6C)
   end
 
   assign rd = RAM[a[31:2]]; // word aligned
