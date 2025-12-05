@@ -68,7 +68,6 @@ module testbench_matmul();
     
     $display("[INFO] Reset liberado, iniciando ejecución...\n");
     
-    // Ejecutar por 200 ciclos de reloj
     // Ejecutar por 43 ciclos de reloj
     repeat(43) begin
       @(posedge clk);
