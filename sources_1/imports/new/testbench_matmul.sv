@@ -86,6 +86,14 @@ module testbench_matmul();
       $display("[CICLO %3d] PC=%08h | Instr=%08h | FSM=%b | IM_SEL=%b | WB: RegWr=%b Rd=%2d Val=%08h",
                cycle_count, PCF, InstrF, fsm_state, im_sel, 
                dut.riscv.RegWriteW, dut.riscv.RdW, dut.riscv.ResultW);
+      
+      // Monitor adicional para debug de datos
+      if (fsm_state == 1'b1) begin
+         $display("    [DEBUG] FP ALU: A=%h B=%h -> Res=%h", 
+                  dut.riscv.dp.SrcAE_fp, dut.riscv.dp.SrcBE_fp, dut.riscv.dp.fpuResult);
+         $display("    [DEBUG] Shadow Regs: x30(A)=%h, x31(B)=%h, x29(C)=%h",
+                  dut.riscv.rf_int.rf[30], dut.riscv.rf_int.rf[31], dut.riscv.rf_int.rf[29]);
+      end
     end
   end
   

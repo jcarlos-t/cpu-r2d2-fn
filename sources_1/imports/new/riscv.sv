@@ -135,7 +135,8 @@ module riscv(
     Rs1D, Rs2D, Rs1E, Rs2E, RdE, RdM, RdW,
     PCSrcE, ResultSrcEb0, RegWriteM, RegWriteW,
     isFPD, useFP_RF_D, useFP_RF_E, useFP_RF_M, useFP_RF_W,
-    ForwardAE, ForwardBE, StallF, StallD, FlushD, FlushE
+    ForwardAE, ForwardBE, StallF, StallD, FlushD, FlushE,
+    ToggleFSM
   );
 
   // ===========================================================================
@@ -520,7 +521,8 @@ module hazard(
   input  logic       RegWriteM, RegWriteW,
   input  logic       isFPD, useFP_RF_D, useFP_RF_E, useFP_RF_M, useFP_RF_W,
   output logic [1:0] ForwardAE, ForwardBE,
-  output logic       StallF, StallD, FlushD, FlushE
+  output logic       StallF, StallD, FlushD, FlushE,
+  input  logic       ToggleFSM
 );
   logic lwStallD;
 
@@ -545,7 +547,7 @@ module hazard(
   assign lwStallD = ResultSrcEb0 & ((Rs1D == RdE) | (Rs2D == RdE)) & (isFPD == useFP_RF_E);
   assign StallD   = lwStallD;
   assign StallF   = lwStallD;
-  assign FlushD   = PCSrcE;
+  assign FlushD   = PCSrcE | ToggleFSM;
   assign FlushE   = lwStallD | PCSrcE;
 endmodule
 
