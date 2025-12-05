@@ -106,6 +106,7 @@ module riscv(
   logic [31:0] RD1D_fp, RD2D_fp;
   
   logic StartMatmul2, EndMatmul, ResetPC;
+  logic RegWriteE; // Exposed from controller
 
   controller c(
     clk, reset,
@@ -113,10 +114,12 @@ module riscv(
     FlushE, ZeroE, PCSrcE, ALUControlE, ALUSrcE, ResultSrcEb0,
     isFPD, isFPE, round_modeE, useFP_RF_D, useFP_RF_E,
     MemWriteM, RegWriteM, isFPM, useFP_RF_M,
-    RegWriteW, ResultSrcW, isFPW, useFP_RF_W,
+    RegWriteW, RegWriteE, ResultSrcW, isFPW, useFP_RF_W,
     StartMatmul2, EndMatmul, ResetPC, ToggleFSM,
     StallD
   );
+
+  logic [31:0] ALUResultE, ResultW; // Exposed from datapath
 
   datapath dp(
     clk, reset,
@@ -124,7 +127,7 @@ module riscv(
     opD, funct3D, funct7D, StallD, FlushD, ImmSrcD,
     FlushE, ForwardAE, ForwardBE, PCSrcE, ALUControlE,
     ALUSrcE, isFPD, isFPE, round_modeE, ZeroE,
-    MemWriteM, WriteDataM, ALUResultM, ReadDataM,
+    MemWriteM, WriteDataM, ALUResultM, ALUResultE, ResultW, ReadDataM,
     RegWriteW, useFP_RF_W, ResultSrcW,
     Rs1D, Rs2D, Rs1E, Rs2E, RdE, RdM, RdW, RdD,
     RD1D_int, RD2D_int, RD1D_fp, RD2D_fp,
@@ -152,8 +155,24 @@ module riscv(
   assign we_matmul_fp  = (StartMatmul2) & isFPD;
   
   // Capturar direcciones desde los valores leídos del regfile
-  assign matmul_addr_A = RD1D_int;  // rs1
-  assign matmul_addr_B = RD2D_int;  // rs2
+  // Forwarding logic for Shadow Write (Decode Stage)
+  // Prioridad: Execute > Memory > Writeback > RegFile
+  
+  // Forward A (Rs1D)
+  always_comb begin
+    if ((Rs1D != 0) && (Rs1D == RdE) && RegWriteE) matmul_addr_A = ALUResultE;
+    else if ((Rs1D != 0) && (Rs1D == RdM) && RegWriteM) matmul_addr_A = ALUResultM;
+    else if ((Rs1D != 0) && (Rs1D == RdW) && RegWriteW) matmul_addr_A = ResultW;
+    else matmul_addr_A = RD1D_int;
+  end
+  
+  // Forward B (Rs2D)
+  always_comb begin
+    if ((Rs2D != 0) && (Rs2D == RdE) && RegWriteE) matmul_addr_B = ALUResultE;
+    else if ((Rs2D != 0) && (Rs2D == RdM) && RegWriteM) matmul_addr_B = ALUResultM;
+    else if ((Rs2D != 0) && (Rs2D == RdW) && RegWriteW) matmul_addr_B = ResultW;
+    else matmul_addr_B = RD2D_int;
+  end
   
   // Para rd necesitamos leer su valor actual
   logic [31:0] rd_value;
@@ -212,6 +231,7 @@ module controller(
   output logic       MemWriteM,
   output logic       RegWriteM, isFPM, useFP_RF_M, // para Hazard Unit
   output logic       RegWriteW, // para datapath and
+  output logic       RegWriteE, // Exposed for Shadow Write forwarding
   output logic [1:0] ResultSrcW,
   output logic       isFPW, useFP_RF_W,
   // Señales para MATMUL microcodigo
@@ -219,7 +239,7 @@ module controller(
   input  logic       StallD
 );
   // señales de pipelined
-  logic       RegWriteD, RegWriteE;
+  logic       RegWriteD; // RegWriteE is now an output
   logic [1:0] ResultSrcD, ResultSrcE, ResultSrcM;
   logic       MemWriteD, MemWriteE;
   logic       JumpD, JumpE;
@@ -391,6 +411,8 @@ module datapath(
   // Señales de Memory
   input  logic        MemWriteM,
   output logic [31:0] WriteDataM, ALUResultM,
+  output logic [31:0] ALUResultE, // Exposed for Shadow Write forwarding
+  output logic [31:0] ResultW,    // Exposed for Shadow Write forwarding
   input  logic [31:0] ReadDataM,
   // Señales de Writeback
   input  logic        RegWriteW, useFP_RF_W,
@@ -421,7 +443,7 @@ module datapath(
   logic [31:0] PCE, ImmExtE;
   logic [31:0] SrcAE_int, SrcBE_int;  // Integer ALU inputs
   logic [31:0] SrcAE_fp, SrcBE_fp;    // FP ALU inputs
-  logic [31:0] ALUResultE;
+  // logic [31:0] ALUResultE; // Now an output port
   logic [31:0] WriteDataE_int, WriteDataE_fp;
   logic [31:0] PCPlus4E;
   logic [31:0] PCTargetE;
@@ -433,7 +455,7 @@ module datapath(
   logic [31:0] ALUResultW;
   logic [31:0] ReadDataW;
   logic [31:0] PCPlus4W;
-  logic [31:0] ResultW;
+  // logic [31:0] ResultW; // Now an output port
 
   // Etapa de Fetch
   // Lógica de PC Next: ResetPC > Branch/Jump > PC+4

@@ -69,10 +69,19 @@ module testbench_matmul();
     $display("[INFO] Reset liberado, iniciando ejecución...\n");
     
     // Ejecutar por 200 ciclos de reloj
-    repeat(200) begin
+    // Ejecutar por 60 ciclos de reloj
+    repeat(60) begin
       @(posedge clk);
       cycle_count = cycle_count + 1;
     end
+    
+    $display("\n================================================================================");
+    $display("  VERIFICACIÓN FINAL DE MEMORIA");
+    $display("================================================================================");
+    $display("  C[0][0] (0x60): %h %s", dut.dmem.RAM[24], (dut.dmem.RAM[24] == exp_C00) ? "✅" : "❌");
+    $display("  C[0][1] (0x64): %h %s", dut.dmem.RAM[25], (dut.dmem.RAM[25] == exp_C01) ? "✅" : "❌");
+    $display("  C[1][0] (0x68): %h %s", dut.dmem.RAM[26], (dut.dmem.RAM[26] == exp_C10) ? "✅" : "❌");
+    $display("  C[1][1] (0x6C): %h %s", dut.dmem.RAM[27], (dut.dmem.RAM[27] == exp_C11) ? "✅" : "❌");
     
     $display("\n================================================================================");
     $display("  Test completado después de %0d ciclos", cycle_count);
@@ -83,9 +92,10 @@ module testbench_matmul();
   // Monitor detallado de señales en cada ciclo
   always @(posedge clk) begin
     if (!reset) begin
-      $display("[CICLO %3d] PC=%08h | Instr=%08h | FSM=%b | IM_SEL=%b | WB: RegWr=%b Rd=%2d Val=%08h",
-               cycle_count, PCF, InstrF, fsm_state, im_sel, 
-               dut.riscv.RegWriteW, dut.riscv.RdW, dut.riscv.ResultW);
+      $display("[CICLO %3d] PC=%08h | Instr=%08h | FSM=%b | WB: RegWr=%b Rd=%2d Val=%08h | MemWr=%b DataM=%08h",
+               cycle_count, PCF, InstrF, fsm_state, 
+               dut.riscv.RegWriteW, dut.riscv.RdW, dut.riscv.ResultW,
+               MemWriteM, WriteDataM);
       
       // Monitor adicional para debug de datos
       if (fsm_state == 1'b1) begin
@@ -130,10 +140,38 @@ module testbench_matmul();
   
   
   // Monitor de escrituras a memoria
+  // Verificación de resultados esperados (C = A x B)
+  // A = [[1.5, 2.3], [3.7, 4.2]]
+  // B = [[5.1, 6.8], [7.4, 8.9]]
+  // C = [[24.67, 30.67], [49.95, 62.54]]
+  logic [31:0] exp_C00 = 32'h41c55c28; // 24.67
+  logic [31:0] exp_C01 = 32'h41f55c27; // 30.67
+  logic [31:0] exp_C10 = 32'h4247cccc; // 49.95
+  logic [31:0] exp_C11 = 32'h427a28f4; // 62.54
+
   always @(posedge clk) begin
     if (!reset && MemWriteM) begin
       $display("\n    [MEM WRITE] Dirección: %08h, Dato: %08h (Ciclo %0d)",
                DataAdrM, WriteDataM, cycle_count);
+               
+      case (DataAdrM)
+        32'h00000060: begin
+          if (WriteDataM == exp_C00) $display("    ✅ [PASS] C[0][0] Correcto: %h (19.0)", WriteDataM);
+          else $display("    ❌ [FAIL] C[0][0] Incorrecto: Esperado %h, Obtenido %h", exp_C00, WriteDataM);
+        end
+        32'h00000064: begin
+          if (WriteDataM == exp_C01) $display("    ✅ [PASS] C[0][1] Correcto: %h (22.0)", WriteDataM);
+          else $display("    ❌ [FAIL] C[0][1] Incorrecto: Esperado %h, Obtenido %h", exp_C01, WriteDataM);
+        end
+        32'h00000068: begin
+          if (WriteDataM == exp_C10) $display("    ✅ [PASS] C[1][0] Correcto: %h (43.0)", WriteDataM);
+          else $display("    ❌ [FAIL] C[1][0] Incorrecto: Esperado %h, Obtenido %h", exp_C10, WriteDataM);
+        end
+        32'h0000006C: begin
+          if (WriteDataM == exp_C11) $display("    ✅ [PASS] C[1][1] Correcto: %h (50.0)", WriteDataM);
+          else $display("    ❌ [FAIL] C[1][1] Incorrecto: Esperado %h, Obtenido %h", exp_C11, WriteDataM);
+        end
+      endcase
     end
   end
   
